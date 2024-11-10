@@ -46,27 +46,26 @@ for category in categories_db.keys():
             cursor.execute(subcategory_insert, subcategory_data)
         except:
             print("Ошибка при добавлении подкатегории")
-        subcategory_id += 1
-
+        
         try:
             db.commit()
         except:
             db.rollback
 
-    if subcategory in characteristics_db.keys():
         for characteristic in characteristics_db[subcategory]:
-            characteristic_data = (characteristic_id, characteristic, subcategory_id)
-            try:
-                cursor.execute(characteristic_insert, characteristic_data)
-            except:
-                print("Ошибка при добавлении характеристики")
-            characteristic_id += 1
+            if subcategory in characteristics_db.keys():
+                characteristic_data = (characteristic_id, characteristic, subcategory_id)
+                try:
+                    cursor.execute(characteristic_insert, characteristic_data)
+                except:
+                    print("Ошибка при добавлении характеристики")
+                characteristic_id += 1
 
-            try:
-                db.commit()
-            except:
-                db.rollback
+                try:
+                    db.commit()
+                except:
+                    db.rollback
 
-
+        subcategory_id += 1
     category_id +=1
 db.close()
