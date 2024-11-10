@@ -3,22 +3,41 @@ from bs4 import BeautifulSoup
 import time
 import json
 import os
+import mysql.connector
+from mysql.connector import errorcode
 
 url = 'https://www.xcom-shop.ru/catalog/kompyuternye_komplektyyuschie/'
 url_orig = 'https://www.xcom-shop.ru'
+
+
+
+
+config = {'user': 'root',
+  'password': '',
+  'host': '127.0.0.1',
+  'database': 'x-com',
+  'raise_on_warnings': True}
+
+db = mysql.connector.connect(**config)
+cursor = db.cursor()
+
+category_id = 1
+subcategory_id = 1
+characteristic_id = 1
+category_insert = ("INSERT INTO category VALUES (%s, %s)")
+subcategory_insert = ("INSERT INTO subcategory VALUES (%s, %s, %s)")
+characteristic_insert = ("INSERT INTO charcteristics VALUES (%s, %s, %s)")
 
 html = requests.get(url)
 soup = BeautifulSoup(html.text, 'html.parser')
 
 if os.path.exists("./categories.json"):
-    # файл существует
     with open("./categories.json", "r", encoding="utf-8") as file:
         category_db = json.load(file)
 else:
     category_db = {}
 
 if os.path.exists("./characteristics.json"):
-    # файл существует
     with open("./characteristics.json", "r", encoding="utf-8") as file:
         characteristics_db = json.load(file)
 else:
@@ -28,12 +47,26 @@ categories_list = soup.find('div', class_='header-catalog-menu')
 
 categories = categories_list.find_all('a', href=True)
 for category in categories:
+    if category_id == 4:
+        db.close
+        break
     if category.text.strip() in category_db.keys():
         print(f'Категория {category.text.strip()} уже добавлена')
     else:
         print(f"Категория: {category.text.strip()}")
         
         category_db[category.text.strip()] = []
+        # Начало MySql запроса 
+
+        category_data = (category_id, category.text.strip())
+        try:
+            cursor.execute(category_insert, category_data)
+            db.commit()
+        except mysql.connector.Error as e:
+            print("Ошибка при добавлении категории", e)
+            db.rollback
+            
+        # Конец MySql запроса
         subcategories_link = requests.get(f"{url_orig}{category['href']}")
         subcategories_soup = BeautifulSoup(subcategories_link.text, 'html.parser')
 
@@ -45,6 +78,18 @@ for category in categories:
                 print(f"Подкатегория: {subcategory.text.strip()}")
                 category_db[category.text.strip()].append(subcategory.text.strip())
                 characteristics_db[subcategory.text.strip()] = []
+
+                # Начало MySql запроса
+
+                subcategory_data = (subcategory_id, subcategory.text.strip(), category_id)
+                try:
+                    cursor.execute(subcategory_insert, subcategory_data)
+                    db.commit()
+                except mysql.connector.Error as e:
+                    print("Ошибка при добавлении подкатегории", e)
+                    db.rollback
+
+                # Конец MySql запроса
 
                 items_page = requests.get(f"{url_orig}{subcategory['href']}")
                 items_page_soup = BeautifulSoup(items_page.text, 'html.parser')
@@ -60,15 +105,27 @@ for category in categories:
                             continue
                         else:
                             characteristics_db[subcategory.text.strip()].append(characteristic.text.strip())
-            print('------------------------------------')
+                            characteristic_data = (characteristic_id, characteristic.text.strip(), subcategory_id)
+                            try:
+                                # Начало MySql запроса
+
+                                cursor.execute(characteristic_insert, characteristic_data)
+                                db.commit()
+                                characteristic_id += 1
+                            except mysql.connector.Error as e:
+                                print("Ошибка при добавлении характеристики", e)
+                                db.rollback
+
+                                # Конец MySql запроса
+
+            subcategory_id += 1
+    category_id +=1
+    print('------------------------------------')
     
     with open('characteristics.json', 'w', encoding='utf-8') as file:
         json.dump(characteristics_db, file, indent=4, ensure_ascii=False)
-                
-    time.sleep(1)
 
 with open('categories.json', 'w', encoding='utf-8') as file:
         json.dump(category_db, file, indent=4, ensure_ascii=False)
-
 print("ГОТОВО")
     
