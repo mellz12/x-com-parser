@@ -39,7 +39,7 @@ for category in categories:
 
         subcategories = subcategories_soup.find_all('a', class_='list-subfolders__item')
         for subcategory in subcategories:
-            if subcategory.text.strip() in category_db[category.text.strip]:
+            if subcategory.text.strip() in category_db[category.text.strip()]:
                 print(f"Подкатегория {subcategory.text.strip()} уже добавлена")
             else:
                 print(f"Подкатегория: {subcategory.text.strip()}")
