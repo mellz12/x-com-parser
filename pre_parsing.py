@@ -23,10 +23,9 @@ cursor = db.cursor()
 
 category_id = 1
 subcategory_id = 1
-characteristic_id = 1
-category_insert = ("INSERT INTO category VALUES (%s, %s)")
-subcategory_insert = ("INSERT INTO subcategory VALUES (%s, %s, %s)")
-characteristic_insert = ("INSERT INTO charcteristics VALUES (%s, %s, %s)")
+category_insert = ("INSERT INTO category (category_name) VALUES (%s)")
+subcategory_insert = ("INSERT INTO subcategory (subcategory_name, category_id) VALUES (%s, %s)")
+characteristic_insert = ("INSERT INTO characteristics (characteristics_name, subcategory_id) VALUES (%s, %s)")
 
 html = requests.get(url)
 soup = BeautifulSoup(html.text, 'html.parser')
@@ -58,7 +57,7 @@ for category in categories:
         category_db[category.text.strip()] = []
         # Начало MySql запроса 
 
-        category_data = (category_id, category.text.strip())
+        category_data = (category.text.strip(),)
         try:
             cursor.execute(category_insert, category_data)
             db.commit()
@@ -81,7 +80,7 @@ for category in categories:
 
                 # Начало MySql запроса
 
-                subcategory_data = (subcategory_id, subcategory.text.strip(), category_id)
+                subcategory_data = (subcategory.text.strip(), category_id)
                 try:
                     cursor.execute(subcategory_insert, subcategory_data)
                     db.commit()
@@ -105,13 +104,12 @@ for category in categories:
                             continue
                         else:
                             characteristics_db[subcategory.text.strip()].append(characteristic.text.strip())
-                            characteristic_data = (characteristic_id, characteristic.text.strip(), subcategory_id)
+                            characteristic_data = (characteristic.text.strip(), subcategory_id)
                             try:
                                 # Начало MySql запроса
 
                                 cursor.execute(characteristic_insert, characteristic_data)
                                 db.commit()
-                                characteristic_id += 1
                             except mysql.connector.Error as e:
                                 print("Ошибка при добавлении характеристики", e)
                                 db.rollback

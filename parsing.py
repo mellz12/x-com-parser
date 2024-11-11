@@ -1,3 +1,4 @@
+import time
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -5,31 +6,33 @@ import mysql.connector
 from mysql.connector import errorcode
 
 
+def item_parser(item_link, subcategory, subcategory_id, db, cursor):
 
-
-def item_parser(url, subcategory, subcategory_id, id_counter):
-
-    with open('./characteristics.json', 'r', encoding='utf-8') as file:
+    with open("./characteristics.json", "r", encoding="utf-8") as file:
         characteristics_dict = json.load(file)
-    product_insert = ("INSERT INTO category VALUES (%s, %s, %s)")
-    productcategory_insert = ("INSERT INTO category VALUES (%s, %s, %s)")
-    productcharacteristics_insert = ("INSERT INTO category VALUES (%s, %s, %s, %s)")
-    productprice_insert = ("INSERT INTO category VALUES (%s, %s, %s)")
 
-    html = requests.get(url)
-    soup = BeautifulSoup(html.text, 'html.parser')
+    product_insert = "INSERT INTO products VALUES (%s, %s, %s)"
+    productcategory_insert = "INSERT INTO productcategory (product_id, subcategory_id) VALUES (%s, %s)"
+    productcharacteristics_insert = (
+        "INSERT INTO productcharacteristics (value, product_id, characteristic_id) VALUES (%s, %s, %s)"
+    )
+    productprice_insert = "INSERT INTO productprice (price, product_id) VALUES (%s, %s)"
 
-    id = soup.find("div", id='product_part_number').text
-    id = ''.join(filter(str.isdecimal, id))
+    html = requests.get(item_link)
+    soup = BeautifulSoup(html.text, "html.parser")
+
+    id = soup.find("div", id="product_part_number").text
+    id = "".join(filter(str.isdecimal, id))
     print(id)
 
-    name = soup.find('div', class_='card-sticky__name').text
-    description = soup.find('div', class_= 'card-tabs-content__description')
+    name = soup.find("div", class_="card-sticky__name").text
+    print(name)
 
+    description = soup.find("div", class_="card-tabs-content__description")
     try:
-        description=description.text
+        description = description.text
     except AttributeError:
-        description = ''
+        description = ""
     finally:
         print(description)
 
@@ -40,8 +43,9 @@ def item_parser(url, subcategory, subcategory_id, id_counter):
     except mysql.connector.Error as e:
         print("Ошибка при добавлении товара", e)
         db.rollback
+        return
 
-    productcategory_data = (id_counter, id, subcategory_id)
+    productcategory_data = (id, subcategory_id)
     try:
         cursor.execute(productcategory_insert, productcategory_data)
         db.commit()
@@ -49,14 +53,10 @@ def item_parser(url, subcategory, subcategory_id, id_counter):
         print("Ошибка при добавлении в таблицу productcategory", e)
         db.rollback
 
-    db = {id : []}
-    product_table = {'product' : {'id' : id, "name" : name, "desc" : description}}
-    db[id].append(product_table)
+    price = soup.find("div", class_="card-content-total-price__current").text
+    price = "".join(filter(str.isdecimal, price))
 
-    price = soup.find('div', class_='card-content-total-price__current').text
-    price = ''.join(filter(str.isdecimal, price))
-    
-    productprice_data = (id_counter, price, id)
+    productprice_data = (price, id)
     try:
         cursor.execute(productprice_insert, productprice_data)
         db.commit()
@@ -64,70 +64,89 @@ def item_parser(url, subcategory, subcategory_id, id_counter):
         print("Ошибка при добавлении в таблицу productprice", e)
         db.rollback
 
-    characteristics = soup.find_all('li', class_='card-tabs-props-list-item')
+    characteristics_table = soup.find("ul", class_="card-tabs-props-list")
+    characteristics = characteristics_table.find_all('li')
     for characteristic in characteristics:
-        charac = characteristic.find('div', class_='card-tabs-props-list-item__label')
-        value = characteristic.find('div', class_='card-tabs-props-list-item__value')
+        charac = characteristic.find("div", class_="card-tabs-props-list-item__label")
+        value = characteristic.find("div", class_="card-tabs-props-list-item__value")
+        try:
+            charac = charac.text.strip()
+            value = value.text.strip()
+        except:
+            print("Ошибка! Характеристика не найдена")
+            charac, value = '', ''
+            continue
+        finally:
+            print(charac, " - ", value)
         
+            id_sql = "SELECT id FROM characteristics WHERE subcategory_id = %s AND characteristics_name = %s"
+            id_sql_data = (subcategory_id, charac)
+        try:
+            cursor.execute(id_sql, id_sql_data)
+            charac_id = cursor.fetchone()
+            charac_id = int(charac_id[0])
+        except mysql.connector.Error as e:
+            print("Ошибка при получении id", e)
+
+        productcharac_data = (value, id, charac_id)
+        try:
+            cursor.execute(productcharacteristics_insert, productcharac_data)
+            db.commit()
+        except mysql.connector.Error as e:
+            print("Ошибка при добавлении характеристики товара", e)
+            db.rollback
+
+    price_and_rating_dict = {
+        "productprice": {
+            "id": "sql запрос по макс. id + 1",
+            "price": price,
+            "product_id": id,
+        }
+    }
 
 
-
-
-    price_and_rating_dict = {'productprice' : {'id' : "sql запрос по макс. id + 1", 'price' : price, 'product_id' : id}}
-
-    db[id].append(price_and_rating_dict)
-
-
-
-
-config = {'user': 'root',
-  'password': '',
-  'host': '127.0.0.1',
-  'database': 'x-com',
-  'raise_on_warnings': True}
+config = {
+    "user": "root",
+    "password": "",
+    "host": "127.0.0.1",
+    "database": "x-com",
+    "raise_on_warnings": True,
+}
 
 db = mysql.connector.connect(**config)
 cursor = db.cursor()
 
 
 
-
-url = 'https://www.xcom-shop.ru'
+url = "https://www.xcom-shop.ru"
 
 html = requests.get(url)
-soup = BeautifulSoup(html, 'html.parser')
+soup = BeautifulSoup(html.text, "html.parser")
 
-categories_list = soup.find('div', class_='header-catalog-menu')
+categories_list = soup.find("div", class_="header-catalog-menu")
 
 category_id = 1
 subcategory_id = 1
-id_counter = 1
 
-categories = categories_list.find_all('a', href=True)
+categories = categories_list.find_all("a", href=True)
 for category in categories:
-        
+    if category_id == 4:
+        break
     subcategories_link = requests.get(f"{url}{category['href']}")
-    subcategories_soup = BeautifulSoup(subcategories_link.text, 'html.parser')
+    subcategories_soup = BeautifulSoup(subcategories_link.text, "html.parser")
 
-    subcategories = subcategories_soup.find_all('a', class_='list-subfolders__item')
+    subcategories = subcategories_soup.find_all("a", class_="list-subfolders__item")
     for subcategory in subcategories:
 
         items_page = requests.get(f"{url}{subcategory['href']}")
-        items_page_soup = BeautifulSoup(items_page.text, 'html.parser')
+        items_page_soup = BeautifulSoup(items_page.text, "html.parser")
 
-        items_cards = items_page_soup.find_all('a', class_='catalog_item__name catalog_item__name--tiles')
+        items_cards = items_page_soup.find_all(
+            "a", class_="catalog_item__name catalog_item__name--tiles"
+        )
         for items in items_cards:
-            item_link = requests.get(f'{url}{items['href']}')
-            item_parser(item_link, subcategory, subcategory_id, id_counter)
-            id_counter += 1
+            item_link = url + items["href"]
+            item_parser(item_link, subcategory, subcategory_id, db, cursor)
 
         subcategory_id += 1
     category_id += 1
-                    # item_soup = BeautifulSoup(item_link.text, 'html.parser')
-
-                    # characteristics = item_soup.find_all('div', class_='card-tabs-props-list-item__label')
-                    # for characteristic in characteristics:
-                    #     characteristic.text.strip() in characteristics_db[subcategory.text.strip()]
-                            
-# with open('parsed.json', 'w', encoding='utf-8') as file:
-#     json.dump(db, file, indent=4, ensure_ascii=False)
