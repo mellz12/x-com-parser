@@ -12,6 +12,7 @@ def item_parser(item_link, subcategory, subcategory_id, db, cursor):
         characteristics_dict = json.load(file)
 
     product_insert = "INSERT INTO products VALUES (%s, %s, %s)"
+    productphoto_insert = "INSERT INTO productphoto (photo_url, product_url) VALUES (%s, %s)"
     productcategory_insert = "INSERT INTO productcategory (product_id, subcategory_id) VALUES (%s, %s)"
     productcharacteristics_insert = (
         "INSERT INTO productcharacteristics (value, product_id, characteristic_id) VALUES (%s, %s, %s)"
@@ -63,6 +64,18 @@ def item_parser(item_link, subcategory, subcategory_id, db, cursor):
     except mysql.connector.Error as e:
         print("Ошибка при добавлении в таблицу productprice", e)
         db.rollback
+
+        img_container = soup.find('div', class_='card-content-image-main-slider')
+        image_link = img_container.find('img')
+        
+        productphoto_data = (image_link['src'], id)
+        try:
+            cursor.execute(productphoto_insert, productphoto_data)
+            db.commit()
+        except mysql.connector.Error as e:
+            print("Ошибка при добавлении фотографии товара", e)
+            db.rollback
+
 
     characteristics_table = soup.find("ul", class_="card-tabs-props-list")
     characteristics = characteristics_table.find_all('li')
