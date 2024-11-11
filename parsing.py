@@ -6,13 +6,14 @@ import mysql.connector
 from mysql.connector import errorcode
 
 
-def item_parser(item_link, subcategory, subcategory_id, db, cursor):
+def item_parser(item_link, subcategory_id, db, cursor):
 
     with open("./characteristics.json", "r", encoding="utf-8") as file:
         characteristics_dict = json.load(file)
 
     product_insert = "INSERT INTO products VALUES (%s, %s, %s)"
     productphoto_insert = "INSERT INTO productphoto (photo_url, product_url) VALUES (%s, %s)"
+    productratings_insert = "INSERT INTO productratings (username, rating, creation_date, comment, plus, minus, product_id) VALUES (%s, %s, %s, %s, %s, %s, %s)"
     productcategory_insert = "INSERT INTO productcategory (product_id, subcategory_id) VALUES (%s, %s)"
     productcharacteristics_insert = (
         "INSERT INTO productcharacteristics (value, product_id, characteristic_id) VALUES (%s, %s, %s)"
@@ -44,6 +45,7 @@ def item_parser(item_link, subcategory, subcategory_id, db, cursor):
     except mysql.connector.Error as e:
         print("Ошибка при добавлении товара", e)
         db.rollback
+        print('------------------------------------------------')
         return
 
     productcategory_data = (id, subcategory_id)
@@ -75,6 +77,39 @@ def item_parser(item_link, subcategory, subcategory_id, db, cursor):
         except mysql.connector.Error as e:
             print("Ошибка при добавлении фотографии товара", e)
             db.rollback
+
+    reviews_blocks = soup.find_all('div', class_='card-reviews-item')
+    for block in reviews_blocks:
+        plus = ''
+        minus = ''
+        comment = ''
+        username = block.find("div", class_="card-reviews-item-head__name").text
+        print("Пользователь - " ,username)
+        date = block.find('div', class_='card-reviews-item-head__date').text
+        print("Дата - ", date)
+        stars = block.find_all("div", class_="card-reviews-item-head__star active")
+        stars = len(stars)
+        print("Количество звёзд - ", stars)
+        block_titles = block.find_all('div', class_="card-reviews-item-details-info")
+        for block_title in block_titles:
+            title = block_title.find('div', class_='card-reviews-item-details-info__title').text.strip()
+            if title == "Достоинства":
+                plus = block_title.find('div', class_='card-reviews-item-details-info__value').text.strip()
+                print("Плюсы - ", plus)
+            elif title == "Недостатки":
+                minus = block_title.find('div', class_='card-reviews-item-details-info__value').text.strip()
+                print("Минусы - ", minus)
+            else:
+                comment = block_title.find('div', class_='card-reviews-item-details-info__value').text.strip()
+                print("Комментарий - ", comment)
+        productratings_data = (username, stars, date, comment, plus, minus, id)
+        try:
+            cursor.execute(productratings_insert, productratings_data)
+            db.commit()
+        except mysql.connector.Error as e:
+            print("Ошибка при добавлении отзывов товара", e)
+            db.rollback
+
 
 
     characteristics_table = soup.find("ul", class_="card-tabs-props-list")
@@ -108,14 +143,7 @@ def item_parser(item_link, subcategory, subcategory_id, db, cursor):
         except mysql.connector.Error as e:
             print("Ошибка при добавлении характеристики товара", e)
             db.rollback
-
-    price_and_rating_dict = {
-        "productprice": {
-            "id": "sql запрос по макс. id + 1",
-            "price": price,
-            "product_id": id,
-        }
-    }
+    print('------------------------------------------------')
 
 
 config = {
@@ -159,7 +187,7 @@ for category in categories:
         )
         for items in items_cards:
             item_link = url + items["href"]
-            item_parser(item_link, subcategory, subcategory_id, db, cursor)
+            item_parser(item_link, subcategory_id, db, cursor)
 
         subcategory_id += 1
     category_id += 1
