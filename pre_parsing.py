@@ -55,7 +55,7 @@ for category in categories:
         print(f"Категория: {category.text.strip()}")
         
         category_db[category.text.strip()] = []
-        # Начало MySql запроса 
+        # Начало MySql запроса
 
         category_data = (category.text.strip(),)
         try:

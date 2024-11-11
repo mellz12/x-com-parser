@@ -12,8 +12,6 @@ config = {
 db = mysql.connector.connect(**config)
 cursor = db.cursor()
 all_deleter = '''
-TRUNCATE characteristicsgroups;
-ALTER TABLE characteristicsgroups AUTO_INCREMENT = 1;
 TRUNCATE characteristics;
 ALTER TABLE characteristics AUTO_INCREMENT = 1;
 TRUNCATE productcategory;
