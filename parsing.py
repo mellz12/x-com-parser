@@ -4,21 +4,45 @@ from bs4 import BeautifulSoup
 import json
 import mysql.connector
 from mysql.connector import errorcode
+from datetime import datetime
+
+def convert_date(date_str):
+    months = {
+    "января": "01",
+    "февраля": "02",
+    "марта": "03",
+    "апреля": "04",
+    "мая": "05",
+    "июня": "06",
+    "июля": "07",
+    "августа": "08",
+    "сентября": "09",
+    "октября": "10",
+    "ноября": "11",
+    "декабря": "12",
+    }
+
+    day, month_str, year = date_str.split()
+    month = months[month_str]
+    new_date_str = f"{year}-{month}-{day}"
+
+    return new_date_str
+
 
 
 def item_parser(item_link, subcategory_id, db, cursor):
 
-    with open("./characteristics.json", "r", encoding="utf-8") as file:
-        characteristics_dict = json.load(file)
+    cur_date = datetime.today()
+    cur_date = cur_date.strftime("%Y-%m-%d")
 
     product_insert = "INSERT INTO products VALUES (%s, %s, %s)"
     productphoto_insert = "INSERT INTO productphoto (photo_url, product_url) VALUES (%s, %s)"
-    productratings_insert = "INSERT INTO productratings (username, rating, creation_date, comment, plus, minus, product_id) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+    productratings_insert = "INSERT INTO productratings (username, rating, creation_date, comment, plus, minus, product_id, date_of_pars) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
     productcategory_insert = "INSERT INTO productcategory (product_id, subcategory_id) VALUES (%s, %s)"
     productcharacteristics_insert = (
         "INSERT INTO productcharacteristics (value, product_id, characteristic_id) VALUES (%s, %s, %s)"
     )
-    productprice_insert = "INSERT INTO productprice (price, product_id) VALUES (%s, %s)"
+    productprice_insert = "INSERT INTO productprice (price, product_id, date_of_pars) VALUES (%s, %s, %s)"
 
     html = requests.get(item_link)
     soup = BeautifulSoup(html.text, "html.parser")
@@ -43,10 +67,9 @@ def item_parser(item_link, subcategory_id, db, cursor):
         cursor.execute(product_insert, product_data)
         db.commit()
     except mysql.connector.Error as e:
-        print("Ошибка при добавлении товара", e)
+        print("Ошибка при добавлении товара, возможно он уже добавлен", e)
         db.rollback
         print('------------------------------------------------')
-        return
 
     productcategory_data = (id, subcategory_id)
     try:
@@ -59,9 +82,9 @@ def item_parser(item_link, subcategory_id, db, cursor):
     price = soup.find("div", class_="card-content-total-price__current").text
     price = "".join(filter(str.isdecimal, price))
 
-    productprice_data = (price, id)
+    productprice_data = (price, id, cur_date)
     try:
-        cursor.execute(productprice_insert, productprice_data)
+        cursor.execute(productprice_insert, productprice_data,)
         db.commit()
     except mysql.connector.Error as e:
         print("Ошибка при добавлении в таблицу productprice", e)
@@ -80,12 +103,11 @@ def item_parser(item_link, subcategory_id, db, cursor):
 
     reviews_blocks = soup.find_all('div', class_='card-reviews-item')
     for block in reviews_blocks:
-        plus = ''
-        minus = ''
-        comment = ''
+        plus, minus, comment = '', '', ''
         username = block.find("div", class_="card-reviews-item-head__name").text
         print("Пользователь - " ,username)
         date = block.find('div', class_='card-reviews-item-head__date').text
+        date = convert_date(date)
         print("Дата - ", date)
         stars = block.find_all("div", class_="card-reviews-item-head__star active")
         stars = len(stars)
@@ -102,7 +124,7 @@ def item_parser(item_link, subcategory_id, db, cursor):
             else:
                 comment = block_title.find('div', class_='card-reviews-item-details-info__value').text.strip()
                 print("Комментарий - ", comment)
-        productratings_data = (username, stars, date, comment, plus, minus, id)
+        productratings_data = (username, stars, date, comment, plus, minus, id, cur_date)
         try:
             cursor.execute(productratings_insert, productratings_data)
             db.commit()
