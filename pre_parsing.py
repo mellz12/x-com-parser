@@ -10,8 +10,6 @@ url = 'https://www.xcom-shop.ru/catalog/kompyuternye_komplektyyuschie/'
 url_orig = 'https://www.xcom-shop.ru'
 
 
-
-
 config = {'user': 'root',
   'password': '',
   'host': '127.0.0.1',
