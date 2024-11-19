@@ -69,7 +69,6 @@ def item_parser(item_link, subcategory_id, db, cursor):
     except mysql.connector.Error as e:
         print("Ошибка при добавлении товара, возможно он уже добавлен", e)
         db.rollback
-        print('------------------------------------------------')
 
     productcategory_data = (id, subcategory_id)
     try:
@@ -105,25 +104,25 @@ def item_parser(item_link, subcategory_id, db, cursor):
     for block in reviews_blocks:
         plus, minus, comment = '', '', ''
         username = block.find("div", class_="card-reviews-item-head__name").text
-        print("Пользователь - " ,username)
+        # print("Пользователь - " ,username)
         date = block.find('div', class_='card-reviews-item-head__date').text
         date = convert_date(date)
-        print("Дата - ", date)
+        # print("Дата - ", date)
         stars = block.find_all("div", class_="card-reviews-item-head__star active")
         stars = len(stars)
-        print("Количество звёзд - ", stars)
+        # print("Количество звёзд - ", stars)
         block_titles = block.find_all('div', class_="card-reviews-item-details-info")
         for block_title in block_titles:
             title = block_title.find('div', class_='card-reviews-item-details-info__title').text.strip()
             if title == "Достоинства":
                 plus = block_title.find('div', class_='card-reviews-item-details-info__value').text.strip()
-                print("Плюсы - ", plus)
+                # print("Плюсы - ", plus)
             elif title == "Недостатки":
                 minus = block_title.find('div', class_='card-reviews-item-details-info__value').text.strip()
-                print("Минусы - ", minus)
+                # print("Минусы - ", minus)
             else:
                 comment = block_title.find('div', class_='card-reviews-item-details-info__value').text.strip()
-                print("Комментарий - ", comment)
+                # print("Комментарий - ", comment)
         productratings_data = (username, stars, date, comment, plus, minus, id, cur_date)
         try:
             cursor.execute(productratings_insert, productratings_data)
@@ -149,23 +148,44 @@ def item_parser(item_link, subcategory_id, db, cursor):
         finally:
             print(charac, " - ", value)
         
-            id_sql = "SELECT id FROM characteristics WHERE subcategory_id = %s AND characteristics_name = %s"
-            id_sql_data = (subcategory_id, charac)
+        id_sql = "SELECT id FROM characteristics WHERE subcategory_id = %s AND characteristics_name = %s"
+        id_sql_data = (subcategory_id, charac)
         try:
             cursor.execute(id_sql, id_sql_data)
             charac_id = cursor.fetchone()
             charac_id = int(charac_id[0])
         except mysql.connector.Error as e:
             print("Ошибка при получении id", e)
-
-        productcharac_data = (value, id, charac_id)
+        
+        cur_charac_select = "SELECT value FROM productcharacteristics WHERE product_id = %s AND characteristic_id = %s"
+        cur_charac_data = (id, charac_id)
         try:
-            cursor.execute(productcharacteristics_insert, productcharac_data)
-            db.commit()
-        except mysql.connector.Error as e:
-            print("Ошибка при добавлении характеристики товара", e)
-            db.rollback
-    print('------------------------------------------------')
+            cursor.execute(cur_charac_select, cur_charac_data)
+            cur_charac = cursor.fetchone()
+            cur_charac = str(cur_charac[0])
+        except (mysql.connector.Error, TypeError) as e:
+            # print("Ошибка при получении текущего значения характеристики", e)
+            cur_charac = value
+        if value != cur_charac:
+            cur_charac_update = "UPDATE productcharacteristics SET value = %s WHERE product_id = %s AND characteristic_id = %s"
+            cur_charac_update_data = (value, id, charac_id)
+            try:
+                cursor.execute(cur_charac_update, cur_charac_update_data)
+                db.commit()
+                print("Характеристика товара ", name, "обновлена")
+                time.sleep(10)
+            except mysql.connector.Error as e:
+                print('Ошибка при обновлении характеристики', e)
+                db.rollback
+        else:
+            productcharac_data = (value, id, charac_id)
+            try:
+                cursor.execute(productcharacteristics_insert, productcharac_data)
+                db.commit()
+            except mysql.connector.Error as e:
+                print("Ошибка при добавлении характеристики товара", e)
+                db.rollback
+        print('------------------------------------------------')
 
 
 config = {
@@ -177,7 +197,7 @@ config = {
 }
 
 db = mysql.connector.connect(**config)
-cursor = db.cursor()
+cursor = db.cursor(buffered=True)
 
 
 

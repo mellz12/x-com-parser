@@ -54,5 +54,5 @@ TRUNCATE products;
 ALTER TABLE products AUTO_INCREMENT = 1;
 '''
 
-cursor.execute(all_deleter, multi=True)
-db.commit
+# cursor.execute(all_deleter, multi=True)
+# db.commit
